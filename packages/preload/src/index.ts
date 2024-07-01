@@ -31,6 +31,7 @@ import type {
   V1Ingress,
   V1NamespaceList,
   V1Node,
+  V1PersistentVolumeClaim,
   V1Pod,
   V1PodList,
   V1Service,
@@ -58,6 +59,7 @@ import type { ExtensionInfo } from '/@api/extension-info';
 import type { HistoryInfo } from '/@api/history-info';
 import type { IconInfo } from '/@api/icon-info';
 import type { ImageCheckerInfo } from '/@api/image-checker-info';
+import type { ImageFilesInfo } from '/@api/image-files-info';
 import type { ImageInfo } from '/@api/image-info';
 import type { ImageInspectInfo } from '/@api/image-inspect-info';
 import type { ManifestCreateOptions, ManifestInspectInfo } from '/@api/manifest-info';
@@ -1677,6 +1679,13 @@ export function initExposure(): void {
     },
   );
 
+  contextBridge.exposeInMainWorld(
+    'kubernetesReadNamespacedPersistentVolumeClaim',
+    async (name: string, namespace: string): Promise<V1PersistentVolumeClaim | undefined> => {
+      return ipcInvoke('kubernetes-client:readNamespacedPersistentVolumeClaim', name, namespace);
+    },
+  );
+
   contextBridge.exposeInMainWorld('kubernetesReadNode', async (name: string): Promise<V1Node | undefined> => {
     return ipcInvoke('kubernetes-client:readNode', name);
   });
@@ -1776,6 +1785,10 @@ export function initExposure(): void {
 
   contextBridge.exposeInMainWorld('kubernetesDeleteDeployment', async (name: string): Promise<void> => {
     return ipcInvoke('kubernetes-client:deleteDeployment', name);
+  });
+
+  contextBridge.exposeInMainWorld('kubernetesDeletePersistentVolumeClaim', async (name: string): Promise<void> => {
+    return ipcInvoke('kubernetes-client:deletePersistentVolumeClaim', name);
   });
 
   contextBridge.exposeInMainWorld('kubernetesDeleteIngress', async (name: string): Promise<void> => {
@@ -2069,6 +2082,21 @@ export function initExposure(): void {
       cancellationToken?: number,
     ): Promise<containerDesktopAPI.ImageChecks | undefined> => {
       return ipcInvoke('image-checker:check', id, image, cancellationToken);
+    },
+  );
+
+  contextBridge.exposeInMainWorld('getImageFilesProviders', async (): Promise<ImageFilesInfo[]> => {
+    return ipcInvoke('image-files:getProviders');
+  });
+
+  contextBridge.exposeInMainWorld(
+    'imageGetFilesystemLayers',
+    async (
+      id: string,
+      image: containerDesktopAPI.ImageInfo,
+      cancellationToken?: number,
+    ): Promise<containerDesktopAPI.ImageFilesystemLayers | undefined> => {
+      return ipcInvoke('image-files:getFilesystemLayers', id, image, cancellationToken);
     },
   );
 

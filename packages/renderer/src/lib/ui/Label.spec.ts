@@ -49,3 +49,32 @@ test('Expect tooltip', async () => {
   expect(label).toBeInTheDocument();
   expect(label.parentElement?.firstChild).toBeInTheDocument();
 });
+
+test('Expect role to be defined', async () => {
+  const role = 'test';
+  render(LabelSpec, {
+    name: 'A label',
+    role: role,
+  });
+  const label = screen.getByRole(role);
+  expect(label).toBeInTheDocument();
+});
+
+test('Expect no capitalization', async () => {
+  render(LabelSpec, {
+    name: 'label',
+  });
+  const label = screen.getByText('label');
+  expect(label).toBeInTheDocument();
+  expect(label).not.toHaveClass('capitalize');
+});
+
+test('Expect capitalization', async () => {
+  render(LabelSpec, {
+    name: 'label',
+    capitalize: true,
+  });
+  const label = screen.getByText('label');
+  expect(label).toBeInTheDocument();
+  expect(label).toHaveClass('capitalize');
+});

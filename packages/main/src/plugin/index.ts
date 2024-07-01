@@ -32,6 +32,7 @@ import type {
   V1Ingress,
   V1NamespaceList,
   V1Node,
+  V1PersistentVolumeClaim,
   V1Pod,
   V1PodList,
   V1Service,
@@ -77,6 +78,7 @@ import type { ExtensionInfo } from '/@api/extension-info.js';
 import type { HistoryInfo } from '/@api/history-info.js';
 import type { IconInfo } from '/@api/icon-info.js';
 import type { ImageCheckerInfo } from '/@api/image-checker-info.js';
+import type { ImageFilesInfo } from '/@api/image-files-info.js';
 import type { ImageInfo } from '/@api/image-info.js';
 import type { ImageInspectInfo } from '/@api/image-inspect-info.js';
 import type { ManifestCreateOptions, ManifestInspectInfo } from '/@api/manifest-info.js';
@@ -136,6 +138,7 @@ import type { FeaturedExtension } from './featured/featured-api.js';
 import { FilesystemMonitoring } from './filesystem-monitoring.js';
 import { IconRegistry } from './icon-registry.js';
 import { ImageCheckerImpl } from './image-checker.js';
+import { ImageFilesRegistry } from './image-files-registry.js';
 import { ImageRegistry } from './image-registry.js';
 import { InputQuickPickRegistry } from './input-quickpick/input-quickpick-registry.js';
 import { ExtensionInstaller } from './install/extension-installer.js';
@@ -338,7 +341,9 @@ export class PluginSystem {
         // send only when the UI is ready
         if (this.uiReady && this.isReady) {
           flushQueuedEvents();
-          webContents.send('api-sender', channel, data);
+          if (!webContents.isDestroyed()) {
+            webContents.send('api-sender', channel, data);
+          }
         } else {
           // add to the queue
           queuedEvents.push({ channel, data });
@@ -421,7 +426,7 @@ export class PluginSystem {
     const statusBarRegistry = new StatusBarRegistry(apiSender);
 
     const safeStorageRegistry = new SafeStorageRegistry(directories);
-    await safeStorageRegistry.init();
+    notifications.push(...(await safeStorageRegistry.init()));
 
     const configurationRegistry = new ConfigurationRegistry(apiSender, directories);
     notifications.push(...configurationRegistry.init());
@@ -582,6 +587,8 @@ export class PluginSystem {
 
     const imageChecker = new ImageCheckerImpl(apiSender);
 
+    const imageFiles = new ImageFilesRegistry(apiSender);
+
     const troubleshooting = new Troubleshooting(apiSender);
 
     const contributionManager = new ContributionManager(apiSender, directories, containerProviderRegistry, exec);
@@ -629,6 +636,7 @@ export class PluginSystem {
       cliToolRegistry,
       notificationRegistry,
       imageChecker,
+      imageFiles,
       navigationManager,
       webviewRegistry,
       colorRegistry,
@@ -1846,6 +1854,10 @@ export class PluginSystem {
       return kubernetesClient.deleteDeployment(name);
     });
 
+    this.ipcHandle('kubernetes-client:deletePersistentVolumeClaim', async (_listener, name: string): Promise<void> => {
+      return kubernetesClient.deletePersistentVolumeClaim(name);
+    });
+
     this.ipcHandle('kubernetes-client:deleteIngress', async (_listener, name: string): Promise<void> => {
       return kubernetesClient.deleteIngress(name);
     });
@@ -1857,6 +1869,13 @@ export class PluginSystem {
     this.ipcHandle('kubernetes-client:deleteService', async (_listener, name: string): Promise<void> => {
       return kubernetesClient.deleteService(name);
     });
+
+    this.ipcHandle(
+      'kubernetes-client:readNamespacedPersistentVolumeClaim',
+      async (_listener, name: string, namespace: string): Promise<V1PersistentVolumeClaim | undefined> => {
+        return kubernetesClient.readNamespacedPersistentVolumeClaim(name, namespace);
+      },
+    );
 
     this.ipcHandle(
       'kubernetes-client:readNamespacedDeployment',
@@ -2203,6 +2222,27 @@ export class PluginSystem {
           token = tokenSource?.token;
         }
         return imageChecker.check(id, image, token);
+      },
+    );
+
+    this.ipcHandle('image-files:getProviders', async (): Promise<ImageFilesInfo[]> => {
+      return imageFiles.getImageFilesProviders();
+    });
+
+    this.ipcHandle(
+      'image-files:getFilesystemLayers',
+      async (
+        _listener,
+        id: string,
+        image: ImageInfo,
+        tokenId?: number,
+      ): Promise<containerDesktopAPI.ImageFilesystemLayers | undefined> => {
+        let token;
+        if (tokenId) {
+          const tokenSource = cancellationTokenRegistry.getCancellationTokenSource(tokenId);
+          token = tokenSource?.token;
+        }
+        return imageFiles.getFilesystemLayers(id, image, token);
       },
     );
 

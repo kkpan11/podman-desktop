@@ -81,3 +81,69 @@ test('should send event into onDid when a file is watched into an existing direc
     expect(unlinkListener).toHaveBeenCalledWith(Uri.file(watchedFile));
   });
 });
+
+test('should send event onDidCreate when a directory is created into a watched directory', async () => {
+  watcher = new FileSystemWatcherImpl(rootdir);
+
+  const readyListener = vi.fn();
+  watcher.onReady(readyListener);
+
+  const createListener = vi.fn();
+  watcher.onDidCreate(createListener);
+  const changeListener = vi.fn();
+  watcher.onDidChange(changeListener);
+  const unlinkListener = vi.fn();
+  watcher.onDidDelete(unlinkListener);
+
+  await vi.waitFor(async () => {
+    expect(readyListener).toHaveBeenCalled();
+  });
+
+  expect(createListener).toHaveBeenCalledWith(Uri.file(rootdir));
+  expect(changeListener).not.toHaveBeenCalled();
+  expect(unlinkListener).not.toHaveBeenCalled();
+
+  const createdDir = path.join(rootdir, 'dir');
+  await promises.mkdir(createdDir);
+
+  await vi.waitFor(async () => {
+    expect(createListener).toHaveBeenCalledWith(Uri.file(createdDir));
+  });
+  expect(changeListener).not.toHaveBeenCalled();
+  expect(unlinkListener).not.toHaveBeenCalled();
+});
+
+test('should send event onDidCreate when a file is created inside a non-existent directory', async () => {
+  const watchedFile = path.join(rootdir, 'dir/file.txt');
+  watcher = new FileSystemWatcherImpl(watchedFile);
+
+  const readyListener = vi.fn();
+  watcher.onReady(readyListener);
+
+  const createListener = vi.fn();
+  watcher.onDidCreate(createListener);
+  const changeListener = vi.fn();
+  watcher.onDidChange(changeListener);
+  const unlinkListener = vi.fn();
+  watcher.onDidDelete(unlinkListener);
+
+  expect(createListener).not.toHaveBeenCalled();
+  expect(changeListener).not.toHaveBeenCalled();
+  expect(unlinkListener).not.toHaveBeenCalled();
+
+  await vi.waitFor(async () => {
+    expect(readyListener).toHaveBeenCalled();
+  });
+
+  const dir = path.dirname(watchedFile);
+  await promises.mkdir(dir);
+
+  const h = await promises.open(watchedFile, 'a');
+  await h.close();
+
+  await vi.waitFor(async () => {
+    expect(createListener).toHaveBeenCalledWith(Uri.file(watchedFile));
+  });
+  expect(changeListener).not.toHaveBeenCalled();
+  expect(unlinkListener).not.toHaveBeenCalled();
+});

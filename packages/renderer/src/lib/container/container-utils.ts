@@ -66,12 +66,11 @@ export class ContainerUtils {
     return humanizeDuration(uptimeInMs, { round: true, largest: 1 });
   }
 
-  refreshUptime(containerInfoUI: ContainerInfoUI): string {
+  getUpDate(containerInfoUI: ContainerInfoUI): Date | undefined {
     if (containerInfoUI.state !== 'RUNNING' || !containerInfoUI.startedAt) {
-      return '';
+      return undefined;
     }
-    // make it human friendly
-    return this.humanizeUptime(containerInfoUI.startedAt);
+    return moment(containerInfoUI.startedAt).toDate();
   }
 
   getImage(containerInfo: ContainerInfo): string {
@@ -332,5 +331,13 @@ export class ContainerUtils {
       .split(' ')
       .filter(part => !part.startsWith('is:'))
       .join(' ');
+  }
+
+  isContainerGroupInfoUI(object: ContainerInfoUI | ContainerGroupInfoUI): object is ContainerGroupInfoUI {
+    return 'type' in object && typeof object.type === 'string';
+  }
+
+  isContainerInfoUI(object: ContainerInfoUI | ContainerGroupInfoUI): object is ContainerInfoUI {
+    return 'state' in object && typeof object.state === 'string';
   }
 }

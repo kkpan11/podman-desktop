@@ -1,10 +1,11 @@
 <script lang="ts">
 import { faArrowUp, faDownload, faEdit, faLayerGroup, faPlay, faTrash } from '@fortawesome/free-solid-svg-icons';
 import { createEventDispatcher, onDestroy, onMount } from 'svelte';
-import type { Unsubscriber } from 'svelte/motion';
+import type { Unsubscriber } from 'svelte/store';
 import { router } from 'tinro';
 
 import ContributionActions from '/@/lib/actions/ContributionActions.svelte';
+import { withConfirmation } from '/@/lib/dialogs/messagebox-utils';
 import { context } from '/@/stores/context';
 import { saveImagesInfo } from '/@/stores/save-images-store';
 
@@ -102,8 +103,7 @@ function saveImage() {
 
 <ListItemButtonIcon
   title="Delete Image"
-  confirm="{true}"
-  onClick="{() => deleteImage()}"
+  onClick="{() => withConfirmation(deleteImage, `delete image ${image.name}`)}"
   detailed="{detailed}"
   icon="{faTrash}"
   enabled="{image.status === 'UNUSED'}" />

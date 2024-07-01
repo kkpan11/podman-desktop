@@ -35,6 +35,7 @@ import type {
   V1Ingress,
   V1NamespaceList,
   V1Node,
+  V1PersistentVolumeClaim,
   V1Pod,
   V1PodList,
   V1Service,
@@ -112,6 +113,7 @@ function toPodInfo(pod: V1Pod, contextName?: string): PodInfo {
     engineId: contextName ?? 'kubernetes',
     engineName: 'Kubernetes',
     kind: 'kubernetes',
+    node: pod.spec?.nodeName,
   };
 }
 
@@ -189,10 +191,10 @@ export class KubernetesClient {
     const kubernetesConfiguration = this.configurationRegistry.getConfiguration('kubernetes');
     const userKubeconfigPath = kubernetesConfiguration.get<string>('Kubeconfig');
     if (userKubeconfigPath) {
+      this.kubeconfigPath = userKubeconfigPath;
       this.setupWatcher(userKubeconfigPath);
       // check if path exists
       if (existsSync(userKubeconfigPath)) {
-        this.kubeconfigPath = userKubeconfigPath;
         this.refresh().catch(() => console.error('Refresh of kube resources on startup failed'));
       } else {
         console.error(`Kubeconfig path ${userKubeconfigPath} provided does not exist. Skipping.`);
@@ -702,6 +704,24 @@ export class KubernetesClient {
     }
   }
 
+  async deletePersistentVolumeClaim(name: string): Promise<void> {
+    let telemetryOptions = {};
+    try {
+      const ns = this.getCurrentNamespace();
+      // Only delete PVC if valid namespace && valid connection
+      const connected = await this.checkConnection();
+      if (ns && connected) {
+        const k8sApi = this.kubeConfig.makeApiClient(CoreV1Api);
+        await k8sApi.deleteNamespacedPersistentVolumeClaim(name, ns);
+      }
+    } catch (error) {
+      telemetryOptions = { error: error };
+      throw this.wrapK8sClientError(error);
+    } finally {
+      this.telemetry.track('kubernetesDeletePersistentVolumeClaim', telemetryOptions);
+    }
+  }
+
   async deleteIngress(name: string): Promise<void> {
     let telemetryOptions = {};
     try {
@@ -761,6 +781,9 @@ export class KubernetesClient {
     const k8sApi = this.kubeConfig.makeApiClient(CoreV1Api);
     try {
       const res = await k8sApi.readNamespacedPod(name, namespace);
+      if (res.body?.metadata?.managedFields) {
+        delete res.body.metadata.managedFields;
+      }
       return res?.body;
     } catch (error) {
       telemetryOptions = { error: error };
@@ -775,6 +798,9 @@ export class KubernetesClient {
     const k8sAppsApi = this.kubeConfig.makeApiClient(AppsV1Api);
     try {
       const res = await k8sAppsApi.readNamespacedDeployment(name, namespace);
+      if (res.body?.metadata?.managedFields) {
+        delete res.body.metadata.managedFields;
+      }
       return res?.body;
     } catch (error) {
       telemetryOptions = { error: error };
@@ -784,11 +810,34 @@ export class KubernetesClient {
     }
   }
 
+  async readNamespacedPersistentVolumeClaim(
+    name: string,
+    namespace: string,
+  ): Promise<V1PersistentVolumeClaim | undefined> {
+    let telemetryOptions = {};
+    const k8sApi = this.kubeConfig.makeApiClient(CoreV1Api);
+    try {
+      const res = await k8sApi.readNamespacedPersistentVolumeClaim(name, namespace);
+      if (res?.body?.metadata?.managedFields) {
+        delete res?.body.metadata?.managedFields;
+      }
+      return res?.body;
+    } catch (error) {
+      telemetryOptions = { error: error };
+      throw this.wrapK8sClientError(error);
+    } finally {
+      this.telemetry.track('kubernetesReadNamespacedPersistentVolumeClaim', telemetryOptions);
+    }
+  }
+
   async readNode(name: string): Promise<V1Node | undefined> {
     let telemetryOptions = {};
     const k8sApi = this.kubeConfig.makeApiClient(CoreV1Api);
     try {
       const res = await k8sApi.readNode(name);
+      if (res.body?.metadata?.managedFields) {
+        delete res.body.metadata.managedFields;
+      }
       return res?.body;
     } catch (error) {
       telemetryOptions = { error: error };
@@ -803,6 +852,9 @@ export class KubernetesClient {
     const k8sNetworkingApi = this.kubeConfig.makeApiClient(NetworkingV1Api);
     try {
       const res = await k8sNetworkingApi.readNamespacedIngress(name, namespace);
+      if (res.body?.metadata?.managedFields) {
+        delete res.body.metadata.managedFields;
+      }
       return res?.body;
     } catch (error) {
       telemetryOptions = { error: error };
@@ -823,7 +875,11 @@ export class KubernetesClient {
         'routes',
         name,
       );
-      return res?.body as V1Route;
+      const route = res?.body as V1Route;
+      if (route?.metadata?.managedFields) {
+        delete route.metadata.managedFields;
+      }
+      return route;
     } catch (error) {
       telemetryOptions = { error: error };
       throw this.wrapK8sClientError(error);
@@ -837,6 +893,9 @@ export class KubernetesClient {
     const k8sApi = this.kubeConfig.makeApiClient(CoreV1Api);
     try {
       const res = await k8sApi.readNamespacedService(name, namespace);
+      if (res.body?.metadata?.managedFields) {
+        delete res.body.metadata.managedFields;
+      }
       return res?.body;
     } catch (error) {
       telemetryOptions = { error: error };
@@ -851,6 +910,9 @@ export class KubernetesClient {
     const k8sApi = this.kubeConfig.makeApiClient(CoreV1Api);
     try {
       const res = await k8sApi.readNamespacedConfigMap(name, namespace);
+      if (res.body?.metadata?.managedFields) {
+        delete res.body.metadata.managedFields;
+      }
       return res?.body;
     } catch (error) {
       telemetryOptions = { error: error };
@@ -1116,7 +1178,7 @@ export class KubernetesClient {
    */
   async applyResourcesFromYAML(context: string, yaml: string): Promise<KubernetesObject[]> {
     const manifests = await this.loadManifestsFromYAML(yaml);
-    return this.applyResources(context, manifests, 'apply');
+    return this.applyResources(context, manifests);
   }
 
   /**

@@ -2,7 +2,7 @@
 import type { IconDefinition } from '@fortawesome/fontawesome-common-types';
 import { DropdownMenu, isFontAwesomeIcon } from '@podman-desktop/ui-svelte';
 import { onDestroy, onMount } from 'svelte';
-import type { Unsubscriber } from 'svelte/motion';
+import type { Unsubscriber } from 'svelte/store';
 import Fa from 'svelte-fa';
 
 import { context as storeContext } from '/@/stores/context';
@@ -22,9 +22,6 @@ export let detailed = false;
 export let inProgress = false;
 export let iconOffset = '';
 export let tooltip: string = '';
-
-// Pop up with a dialog before executing the action
-export let confirm = false;
 
 export let contextUI: ContextUI | undefined = undefined;
 
@@ -86,21 +83,7 @@ const buttonDisabledClass =
 // $: handleClick = enabled && !inProgress ? onClick : () => {};
 $: handleClick = () => {
   if (enabled && !inProgress) {
-    if (confirm) {
-      window
-        .showMessageBox({
-          title: 'Confirmation',
-          message: 'Are you sure you want to ' + title.toLowerCase() + '?',
-          buttons: ['Yes', 'Cancel'],
-        })
-        .then(result => {
-          if (result && result.response === 0) {
-            onClick();
-          }
-        });
-    } else {
-      onClick();
-    }
+    onClick();
   }
 };
 $: styleClass = detailed
