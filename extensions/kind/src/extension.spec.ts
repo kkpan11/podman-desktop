@@ -20,8 +20,9 @@ import * as fs from 'node:fs';
 
 import type * as extensionApi from '@podman-desktop/api';
 import * as podmanDesktopApi from '@podman-desktop/api';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
+import { createCluster } from './create-cluster';
 import * as extension from './extension';
 import type { KindGithubReleaseArtifactMetadata } from './kind-installer';
 import { KindInstaller } from './kind-installer';
@@ -38,6 +39,9 @@ vi.mock('./image-handler', () => {
     }),
   };
 });
+vi.mock('./create-cluster', () => ({
+  createCluster: vi.fn(),
+}));
 
 vi.mock('./kind-installer');
 
@@ -45,6 +49,7 @@ vi.mock('@podman-desktop/api', () => ({
   window: {
     withProgress: vi.fn(),
     createStatusBarItem: vi.fn(),
+    showInformationMessage: vi.fn(),
   },
   cli: {
     createCliTool: vi.fn(),
@@ -86,6 +91,7 @@ const CLI_TOOL_MOCK: extensionApi.CliTool = {
   registerUpdate: vi.fn(),
   registerInstaller: vi.fn(),
   updateVersion: vi.fn(),
+  version: '0.0.1',
 } as unknown as extensionApi.CliTool;
 
 beforeEach(() => {
@@ -114,6 +120,10 @@ beforeEach(() => {
   vi.mocked(podmanDesktopApi.containerEngine.listContainers).mockResolvedValue([]);
   vi.mocked(util.removeVersionPrefix).mockReturnValue('1.0.0');
   vi.mocked(util.getSystemBinaryPath).mockReturnValue('test-storage-path/kind');
+});
+
+afterEach(() => {
+  extension.deactivate();
 });
 
 function activate(options?: Partial<extensionApi.ExtensionContext>): Promise<void> {
@@ -349,11 +359,21 @@ async function getCliToolInstaller(): Promise<extensionApi.CliToolInstaller> {
 
 describe('cli#install', () => {
   beforeEach(() => {
+    // mock create cli tool
+    vi.mocked(podmanDesktopApi.cli.createCliTool).mockReturnValue({
+      ...CLI_TOOL_MOCK,
+      version: undefined,
+      dispose: vi.fn(),
+    });
+
     // mock no kind detected
     vi.mocked(util.getKindBinaryInfo).mockRejectedValue('no kind');
   });
 
   test('try to install when there is already an existing version should throw an error', async () => {
+    // mock create cli tool (existing version)
+    vi.mocked(podmanDesktopApi.cli.createCliTool).mockReturnValue(CLI_TOOL_MOCK);
+
     // mock existing cli tool
     vi.mocked(util.getKindBinaryInfo).mockResolvedValue({
       version: '0.0.1',
@@ -467,5 +487,70 @@ describe('cli#uninstall', () => {
     expect(podmanDesktopApi.process.exec).toHaveBeenNthCalledWith(2, command, ['test-storage-path/kind'], {
       isAdmin: true,
     });
+  });
+});
+
+describe('kubernetes create factory', () => {
+  const PROVIDER_MOCK: podmanDesktopApi.Provider = {
+    setKubernetesProviderConnectionFactory: vi.fn(),
+  } as unknown as podmanDesktopApi.Provider;
+
+  beforeEach(async () => {
+    // default: no binary
+    vi.mocked(util.getKindBinaryInfo).mockRejectedValue(new Error('no binary installed'));
+
+    vi.mocked(podmanDesktopApi.provider.createProvider).mockReturnValue(PROVIDER_MOCK);
+    // default to cancel
+    vi.mocked(podmanDesktopApi.window.showInformationMessage).mockResolvedValue('Cancel');
+    // mock artifact
+    vi.mocked(KindInstaller.prototype.getLatestVersionAsset).mockResolvedValue({
+      tag: 'v1.5.6',
+    } as unknown as KindGithubReleaseArtifactMetadata);
+
+    // activate
+    await extension.activate(
+      vi.mocked<extensionApi.ExtensionContext>({
+        subscriptions: {
+          push: vi.fn(),
+        },
+      } as unknown as extensionApi.ExtensionContext),
+    );
+  });
+
+  test('activate should register a kubernetes create factory', async () => {
+    expect(PROVIDER_MOCK.setKubernetesProviderConnectionFactory).toHaveBeenCalledOnce();
+  });
+
+  test('expect info message to be displayed when no binary installed and cluster created called', async () => {
+    // get the create method
+    const { create } = vi.mocked(PROVIDER_MOCK.setKubernetesProviderConnectionFactory).mock.calls[0][0];
+    expect(create).toBeDefined();
+
+    await expect(() => {
+      return create?.({}, undefined, undefined);
+    }).rejects.toThrowError('Unable to create kind cluster. No kind cli detected');
+
+    expect(podmanDesktopApi.window.showInformationMessage).toHaveBeenCalledWith(
+      'Kind is not installed, do you want to install the latest version?',
+      'Cancel',
+      'Confirm',
+    );
+  });
+
+  test('user confirm installation should install latest', async () => {
+    // get the create method
+    const { create } = vi.mocked(PROVIDER_MOCK.setKubernetesProviderConnectionFactory).mock.calls[0][0];
+    expect(create).toBeDefined();
+
+    // simulate user confirmed
+    vi.mocked(podmanDesktopApi.window.showInformationMessage).mockResolvedValue('Confirm');
+
+    await create?.({}, undefined, undefined);
+
+    // expect getLatestVersionAsset and download
+    expect(KindInstaller.prototype.getLatestVersionAsset).toHaveBeenCalled();
+    expect(KindInstaller.prototype.download).toHaveBeenCalled();
+
+    expect(createCluster).toHaveBeenCalled();
   });
 });

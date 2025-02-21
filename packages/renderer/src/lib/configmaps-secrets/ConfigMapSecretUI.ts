@@ -1,5 +1,5 @@
 /**********************************************************************
- * Copyright (C) 2024 Red Hat, Inc.
+ * Copyright (C) 2024-2025 Red Hat, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,12 +16,10 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-export interface ConfigMapSecretUI {
-  name: string;
-  namespace: string;
-  status: string;
+import type { KubernetesNamespacedObjectUI } from '../objects/KubernetesObjectUI';
+
+export interface ConfigMapSecretUI extends KubernetesNamespacedObjectUI {
   keys: string[];
-  selected: boolean;
   type: string;
   created?: Date;
 }

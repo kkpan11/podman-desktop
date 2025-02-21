@@ -28,6 +28,7 @@ export * from './utility/platform';
 export * from './utility/wait';
 
 // exports Podman Desktop Page Object Module
+export * from './model/core/extensions';
 export * from './model/core/operations';
 export * from './model/core/platforms';
 export * from './model/core/states';
@@ -83,3 +84,4 @@ export * from './model/pages/welcome-page';
 export * from './model/workbench/navigation';
 export * from './model/workbench/status-bar';
 export * from './utility/cluster-operations';
+export * from './utility/kubernetes';

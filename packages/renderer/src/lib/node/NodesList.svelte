@@ -1,22 +1,13 @@
 <script lang="ts">
-import {
-  FilteredEmptyScreen,
-  NavPage,
-  Table,
-  TableColumn,
-  TableDurationColumn,
-  TableRow,
-  TableSimpleColumn,
-} from '@podman-desktop/ui-svelte';
+import { TableColumn, TableDurationColumn, TableRow, TableSimpleColumn } from '@podman-desktop/ui-svelte';
 import moment from 'moment';
 
-import KubeActions from '/@/lib/kube/KubeActions.svelte';
-import KubernetesCurrentContextConnectionBadge from '/@/lib/ui/KubernetesCurrentContextConnectionBadge.svelte';
 import { kubernetesCurrentContextNodesFiltered, nodeSearchPattern } from '/@/stores/kubernetes-contexts-state';
 
 import NodeIcon from '../images/NodeIcon.svelte';
+import NameColumn from '../kube/column/Name.svelte';
+import KubernetesObjectsList from '../objects/KubernetesObjectsList.svelte';
 import { NodeUtils } from './node-utils';
-import NodeColumnName from './NodeColumnName.svelte';
 import NodeColumnRoles from './NodeColumnRoles.svelte';
 import NodeColumnStatus from './NodeColumnStatus.svelte';
 import NodeEmptyScreen from './NodeEmptyScreen.svelte';
@@ -33,9 +24,6 @@ $effect(() => {
 });
 
 const nodeUtils = new NodeUtils();
-const nodes = $derived($kubernetesCurrentContextNodesFiltered.map(node => nodeUtils.getNodeUI(node)));
-
-let table: Table;
 
 let statusColumn = new TableColumn<NodeUI>('Status', {
   align: 'center',
@@ -45,7 +33,7 @@ let statusColumn = new TableColumn<NodeUI>('Status', {
 });
 
 let nameColumn = new TableColumn<NodeUI>('Name', {
-  renderer: NodeColumnName,
+  renderer: NameColumn,
   comparator: (a, b): number => a.name.localeCompare(b.name),
 });
 
@@ -85,33 +73,24 @@ const columns = [statusColumn, nameColumn, rolesColumn, versionColumn, osImageCo
 const row = new TableRow<NodeUI>({});
 </script>
 
-<NavPage bind:searchTerm={searchTerm} title="nodes">
-  <svelte:fragment slot="additional-actions">
-    <KubeActions />
-  </svelte:fragment>
-
-  <svelte:fragment slot="bottom-additional-actions">
-    <div class="flex grow justify-end">
-      <KubernetesCurrentContextConnectionBadge />
-    </div>
-  </svelte:fragment>
-
-  <div class="flex min-w-full h-full" slot="content">
-    <Table
-      kind="node"
-      bind:this={table}
-      data={nodes}
-      columns={columns}
-      row={row}
-      defaultSortColumn="Name">
-    </Table>
-
-    {#if $kubernetesCurrentContextNodesFiltered.length === 0}
-      {#if searchTerm}
-        <FilteredEmptyScreen icon={NodeIcon} kind="nodes" bind:searchTerm={searchTerm} />
-      {:else}
-        <NodeEmptyScreen />
-      {/if}
-    {/if}
-  </div>
-</NavPage>
+<KubernetesObjectsList
+  kinds={[{
+    resource: 'nodes',
+    transformer: nodeUtils.getNodeUI.bind(nodeUtils),
+    delete: async (): Promise<void> => {},
+    isResource: (): boolean => true,
+    legacySearchPatternStore: nodeSearchPattern,
+    legacyObjectStore: kubernetesCurrentContextNodesFiltered,
+  }]}
+  singular="node"
+  plural="nodes"
+  icon={NodeIcon}
+  searchTerm={searchTerm}
+  columns={columns}
+  row={row}
+  >
+    <!-- eslint-disable-next-line sonarjs/no-unused-vars -->
+    {#snippet emptySnippet()}
+      <NodeEmptyScreen />
+    {/snippet}
+  </KubernetesObjectsList>

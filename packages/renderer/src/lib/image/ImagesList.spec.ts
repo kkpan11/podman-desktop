@@ -16,10 +16,9 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import '@testing-library/jest-dom/vitest';
 
+import type { ImageInfo } from '@podman-desktop/api';
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 /* eslint-disable import/no-duplicates */
@@ -30,46 +29,28 @@ import { router } from 'tinro';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { viewsContributions } from '/@/stores/views';
+import type { ProviderContainerConnectionInfo, ProviderInfo } from '/@api/provider-info';
 
 import { imagesInfos } from '../../stores/images';
 import { providerInfos } from '../../stores/providers';
 import { IMAGE_LIST_VIEW_BADGES, IMAGE_LIST_VIEW_ICONS, IMAGE_VIEW_BADGES, IMAGE_VIEW_ICONS } from '../view/views';
 import ImagesList from './ImagesList.svelte';
 
-const listImagesMock = vi.fn();
-const getProviderInfosMock = vi.fn();
-const listViewsContributionsMock = vi.fn();
-
 // fake the window.events object
 beforeEach(() => {
   providerInfos.set([]);
   imagesInfos.set([]);
   viewsContributions.set([]);
-  (window as any).getConfigurationValue = vi.fn();
-  (window as any).updateConfigurationValue = vi.fn();
-  (window as any).getContributedMenus = vi.fn();
-  const onDidUpdateProviderStatusMock = vi.fn();
-  (window as any).onDidUpdateProviderStatus = onDidUpdateProviderStatusMock;
-  onDidUpdateProviderStatusMock.mockImplementation(() => Promise.resolve());
-  (window as any).hasAuthconfigForImage = vi.fn();
-  (window as any).hasAuthconfigForImage.mockImplementation(() => Promise.resolve(false));
-
-  (window as any).listContainers = vi.fn();
-  (window as any).listImages = listImagesMock;
-  (window as any).getProviderInfos = getProviderInfosMock;
-  (window as any).listViewsContributions = listViewsContributionsMock;
-  listViewsContributionsMock.mockResolvedValue([]);
-  (window as any).getConfigurationValue = vi.fn();
-  (window as any).getConfigurationProperties = vi.fn().mockResolvedValue({});
-  (window as any).deleteImage = vi.fn();
+  vi.mocked(window.hasAuthconfigForImage).mockResolvedValue(false);
+  vi.mocked(window.listViewsContributions).mockResolvedValue([]);
+  vi.mocked(window.getConfigurationProperties).mockResolvedValue({});
   vi.mocked(window.getConfigurationValue).mockResolvedValue(false);
 
   (window.events as unknown) = {
-    receive: (_channel: string, func: any): void => {
+    receive: (_channel: string, func: () => void): void => {
       func();
     },
   };
-  (window as any).deleteImage = vi.fn().mockResolvedValue(undefined);
 });
 
 async function waitRender(customProperties: object): Promise<void> {
@@ -84,7 +65,7 @@ test('Expect no container engines being displayed', async () => {
 });
 
 test('Expect images being ordered by newest first', async () => {
-  getProviderInfosMock.mockResolvedValue([
+  vi.mocked(window.getProviderInfos).mockResolvedValue([
     {
       name: 'podman',
       status: 'started',
@@ -93,12 +74,12 @@ test('Expect images being ordered by newest first', async () => {
         {
           name: 'podman-machine-default',
           status: 'started',
-        },
+        } as unknown as ProviderContainerConnectionInfo,
       ],
-    },
+    } as unknown as ProviderInfo,
   ]);
 
-  listImagesMock.mockResolvedValue([
+  vi.mocked(window.listImages).mockResolvedValue([
     {
       Id: 'sha256:1234567890123',
       RepoTags: ['fedora:old'],
@@ -126,7 +107,7 @@ test('Expect images being ordered by newest first', async () => {
       engineId: 'podman',
       engineName: 'podman',
     },
-  ]);
+  ] as unknown as ImageInfo[]);
 
   window.dispatchEvent(new CustomEvent('extensions-already-started'));
   window.dispatchEvent(new CustomEvent('provider-lifecycle-change'));
@@ -155,7 +136,7 @@ test('Expect images being ordered by newest first', async () => {
 });
 
 test('Expect filter empty screen', async () => {
-  getProviderInfosMock.mockResolvedValue([
+  vi.mocked(window.getProviderInfos).mockResolvedValue([
     {
       name: 'podman',
       status: 'started',
@@ -164,12 +145,12 @@ test('Expect filter empty screen', async () => {
         {
           name: 'podman-machine-default',
           status: 'started',
-        },
+        } as unknown as ProviderContainerConnectionInfo,
       ],
-    },
+    } as unknown as ProviderInfo,
   ]);
 
-  listImagesMock.mockResolvedValue([
+  vi.mocked(window.listImages).mockResolvedValue([
     {
       Id: 'sha256:1234567890123',
       RepoTags: ['fedora:old'],
@@ -179,7 +160,7 @@ test('Expect filter empty screen', async () => {
       engineId: 'podman',
       engineName: 'podman',
     },
-  ]);
+  ] as unknown as ImageInfo[]);
 
   window.dispatchEvent(new CustomEvent('extensions-already-started'));
   window.dispatchEvent(new CustomEvent('provider-lifecycle-change'));
@@ -200,7 +181,7 @@ test('Expect filter empty screen', async () => {
 });
 
 test('Expect two images in list given image id and engine id', async () => {
-  getProviderInfosMock.mockResolvedValue([
+  vi.mocked(window.getProviderInfos).mockResolvedValue([
     {
       name: 'podman',
       status: 'started',
@@ -209,12 +190,12 @@ test('Expect two images in list given image id and engine id', async () => {
         {
           name: 'podman-machine-default',
           status: 'started',
-        },
+        } as unknown as ProviderContainerConnectionInfo,
       ],
-    },
+    } as unknown as ProviderInfo,
   ]);
 
-  listImagesMock.mockResolvedValue([
+  vi.mocked(window.listImages).mockResolvedValue([
     {
       Id: 'sha256:1234567890123',
       RepoTags: ['fedora:old'],
@@ -260,7 +241,7 @@ test('Expect two images in list given image id and engine id', async () => {
       engineId: 'podman',
       engineName: 'podman',
     },
-  ]);
+  ] as unknown as ImageInfo[]);
 
   window.dispatchEvent(new CustomEvent('extensions-already-started'));
   window.dispatchEvent(new CustomEvent('provider-lifecycle-change'));
@@ -292,7 +273,7 @@ describe('Contributions', () => {
   test.each([{ viewIdContrib: IMAGE_VIEW_ICONS }, { viewIdContrib: IMAGE_LIST_VIEW_ICONS }])(
     'Expect image status being changed with %s contribution',
     async ({ viewIdContrib }) => {
-      getProviderInfosMock.mockResolvedValue([
+      vi.mocked(window.getProviderInfos).mockResolvedValue([
         {
           name: 'podman',
           status: 'started',
@@ -301,16 +282,16 @@ describe('Contributions', () => {
             {
               name: 'podman-machine-default',
               status: 'started',
-            },
+            } as unknown as ProviderContainerConnectionInfo,
           ],
-        },
+        } as unknown as ProviderInfo,
       ]);
 
       const labels = {
         'podman-desktop.label': true,
       };
 
-      listImagesMock.mockResolvedValue([
+      vi.mocked(window.listImages).mockResolvedValue([
         {
           Id: 'sha256:1234567890123',
           RepoTags: ['fedora:old'],
@@ -321,7 +302,7 @@ describe('Contributions', () => {
           engineName: 'podman',
           Labels: labels,
         },
-      ]);
+      ] as unknown as ImageInfo[]);
 
       window.dispatchEvent(new CustomEvent('extensions-already-started'));
       window.dispatchEvent(new CustomEvent('provider-lifecycle-change'));
@@ -338,8 +319,8 @@ describe('Contributions', () => {
         },
       ];
 
-      listViewsContributionsMock.mockReset();
-      listViewsContributionsMock.mockResolvedValue(contribs);
+      vi.mocked(window.listViewsContributions).mockReset();
+      vi.mocked(window.listViewsContributions).mockResolvedValue(contribs);
       // set viewsContributions
       viewsContributions.set(contribs);
 
@@ -370,7 +351,7 @@ describe('Contributions', () => {
   test.each([{ viewIdContrib: IMAGE_VIEW_BADGES }, { viewIdContrib: IMAGE_LIST_VIEW_BADGES }])(
     'Expect bagde being added with %s contribution',
     async ({ viewIdContrib }) => {
-      getProviderInfosMock.mockResolvedValue([
+      vi.mocked(window.getProviderInfos).mockResolvedValue([
         {
           name: 'podman',
           status: 'started',
@@ -379,16 +360,16 @@ describe('Contributions', () => {
             {
               name: 'podman-machine-default',
               status: 'started',
-            },
+            } as unknown as ProviderContainerConnectionInfo,
           ],
-        },
+        } as unknown as ProviderInfo,
       ]);
 
       const labels = {
         'podman-desktop.label': true,
       };
 
-      listImagesMock.mockResolvedValue([
+      vi.mocked(window.listImages).mockResolvedValue([
         {
           Id: 'sha256:1234567890123',
           RepoTags: ['fedora:old'],
@@ -399,7 +380,7 @@ describe('Contributions', () => {
           engineName: 'podman',
           Labels: labels,
         },
-      ]);
+      ] as unknown as ImageInfo[]);
 
       window.dispatchEvent(new CustomEvent('extensions-already-started'));
       window.dispatchEvent(new CustomEvent('provider-lifecycle-change'));
@@ -419,8 +400,8 @@ describe('Contributions', () => {
         },
       ];
 
-      listViewsContributionsMock.mockReset();
-      listViewsContributionsMock.mockResolvedValue(contribs);
+      vi.mocked(window.listViewsContributions).mockReset();
+      vi.mocked(window.listViewsContributions).mockResolvedValue(contribs);
       // set viewsContributions
       viewsContributions.set(contribs);
 
@@ -459,7 +440,7 @@ test('Expect importImage button redirects to image import page', async () => {
 });
 
 test('expect redirect to saveImage page when at least one image is selected and the multiple save button is clicked', async () => {
-  getProviderInfosMock.mockResolvedValue([
+  vi.mocked(window.getProviderInfos).mockResolvedValue([
     {
       name: 'podman',
       status: 'started',
@@ -468,12 +449,12 @@ test('expect redirect to saveImage page when at least one image is selected and 
         {
           name: 'podman-machine-default',
           status: 'started',
-        },
+        } as unknown as ProviderContainerConnectionInfo,
       ],
-    },
+    } as unknown as ProviderInfo,
   ]);
 
-  listImagesMock.mockResolvedValue([
+  vi.mocked(window.listImages).mockResolvedValue([
     {
       Id: 'sha256:1234567890123',
       RepoTags: ['fedora:old'],
@@ -501,7 +482,7 @@ test('expect redirect to saveImage page when at least one image is selected and 
       engineId: 'podman',
       engineName: 'podman',
     },
-  ]);
+  ] as unknown as ImageInfo[]);
 
   const goToMock = vi.spyOn(router, 'goto');
 
@@ -539,7 +520,7 @@ test('Expect load images button redirects to images load page', async () => {
 });
 
 test('Manifest images display without actions', async () => {
-  getProviderInfosMock.mockResolvedValue([
+  vi.mocked(window.getProviderInfos).mockResolvedValue([
     {
       name: 'podman',
       status: 'started',
@@ -548,13 +529,13 @@ test('Manifest images display without actions', async () => {
         {
           name: 'podman-machine-default',
           status: 'started',
-        },
+        } as unknown as ProviderContainerConnectionInfo,
       ],
-    },
+    } as unknown as ProviderInfo,
   ]);
 
   // Set up the image list with one normal image and one manifest image
-  listImagesMock.mockResolvedValue([
+  vi.mocked(window.listImages).mockResolvedValue([
     {
       Id: 'sha256:1234567890123',
       RepoTags: ['normalimage:latest'],
@@ -574,7 +555,7 @@ test('Manifest images display without actions', async () => {
       engineName: 'podman',
       isManifest: true,
     },
-  ]);
+  ] as unknown as ImageInfo[]);
 
   // dispatch events
   window.dispatchEvent(new CustomEvent('extensions-already-started'));
@@ -616,7 +597,7 @@ test('Manifest images display without actions', async () => {
 });
 
 test('Expect user confirmation to pop up when preferences require', async () => {
-  getProviderInfosMock.mockResolvedValue([
+  vi.mocked(window.getProviderInfos).mockResolvedValue([
     {
       name: 'podman',
       status: 'started',
@@ -625,12 +606,12 @@ test('Expect user confirmation to pop up when preferences require', async () => 
         {
           name: 'podman-machine-default',
           status: 'started',
-        },
+        } as unknown as ProviderContainerConnectionInfo,
       ],
-    },
+    } as unknown as ProviderInfo,
   ]);
 
-  listImagesMock.mockResolvedValue([
+  vi.mocked(window.listImages).mockResolvedValue([
     {
       Id: 'sha256:1234567890',
       RepoTags: ['mockimage:latest'],
@@ -640,7 +621,7 @@ test('Expect user confirmation to pop up when preferences require', async () => 
       engineId: 'podman',
       engineName: 'podman',
     },
-  ]);
+  ] as unknown as ImageInfo[]);
 
   // dispatch events
   window.dispatchEvent(new CustomEvent('extensions-already-started'));
@@ -662,7 +643,6 @@ test('Expect user confirmation to pop up when preferences require', async () => 
 
   vi.mocked(window.getConfigurationValue).mockResolvedValue(true);
 
-  (window as any).showMessageBox = vi.fn();
   vi.mocked(window.showMessageBox).mockResolvedValue({ response: 1 });
 
   const deleteButton = screen.getByRole('button', { name: 'Delete 1 selected items' });

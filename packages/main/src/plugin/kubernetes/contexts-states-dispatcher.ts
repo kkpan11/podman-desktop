@@ -20,6 +20,7 @@ import type { ContextHealth } from '/@api/kubernetes-contexts-healths.js';
 import type { ContextPermission } from '/@api/kubernetes-contexts-permissions.js';
 import type { ResourceCount } from '/@api/kubernetes-resource-count.js';
 import type { KubernetesContextResources } from '/@api/kubernetes-resources.js';
+import type { KubernetesTroubleshootingInformation } from '/@api/kubernetes-troubleshooting.js';
 
 import type { ApiSenderType } from '../api.js';
 import type { ContextHealthState } from './context-health-checker.js';
@@ -65,14 +66,7 @@ export class ContextsStatesDispatcher {
   }
 
   getContextsPermissions(): ContextPermission[] {
-    return Array.from(this.manager.getPermissions().entries()).flatMap(([contextName, permissions]) => {
-      return Array.from(permissions.entries()).map(([resourceName, contextResourcePermission]) => ({
-        contextName,
-        resourceName,
-        permitted: contextResourcePermission.permitted,
-        reason: contextResourcePermission.reason,
-      }));
-    });
+    return this.manager.getPermissions();
   }
 
   updateResourcesCount(): void {
@@ -89,5 +83,9 @@ export class ContextsStatesDispatcher {
 
   getResources(contextNames: string[], resourceName: string): KubernetesContextResources[] {
     return this.manager.getResources(contextNames, resourceName);
+  }
+
+  getTroubleshootingInformation(): KubernetesTroubleshootingInformation {
+    return this.manager.getTroubleshootingInformation();
   }
 }

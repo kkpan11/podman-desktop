@@ -1,5 +1,5 @@
 /**********************************************************************
- * Copyright (C) 2022-2024 Red Hat, Inc.
+ * Copyright (C) 2022-2025 Red Hat, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -84,12 +84,22 @@ export class DockerDesktopInstallation {
       }
       // do we have binaries ?
       if (metadata.host.binaries) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        metadata.host.binaries.forEach((binary: any) => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          binary[platform].forEach((binaryPlatform: any) => {
-            hostFiles.push(binaryPlatform.path);
-          });
+        metadata.host.binaries.forEach((binary: { [x: string]: unknown[] }) => {
+          const platformBinaries = binary[platform];
+          if (platformBinaries !== undefined && Array.isArray(platformBinaries)) {
+            platformBinaries.forEach((binaryPlatform: unknown) => {
+              // check if object has path parameter
+              if (
+                typeof binaryPlatform === 'object' &&
+                binaryPlatform &&
+                'path' in binaryPlatform &&
+                typeof binaryPlatform.path === 'string'
+              ) {
+                hostFiles.push(binaryPlatform.path);
+              }
+            });
+          }
+          //}
         });
       }
     }
@@ -176,8 +186,7 @@ export class DockerDesktopInstallation {
     return builtError;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ipcHandle(channel: string, listener: (event: IpcMainInvokeEvent, ...args: any[]) => Promise<void> | any): any {
+  ipcHandle(channel: string, listener: (event: IpcMainInvokeEvent, ...args: string[]) => Promise<void>): void {
     ipcMain.handle(channel, async (...args) => {
       try {
         return { result: await Promise.resolve(listener(...args)) };

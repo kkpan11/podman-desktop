@@ -1,5 +1,5 @@
 /**********************************************************************
- * Copyright (C) 2023 Red Hat, Inc.
+ * Copyright (C) 2023-2025 Red Hat, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,6 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import '@testing-library/jest-dom/vitest';
 
 import { fireEvent, render, screen } from '@testing-library/svelte';
@@ -26,13 +24,10 @@ import { beforeAll, expect, test, vi } from 'vitest';
 import type { FeaturedExtension } from '../../../../main/src/plugin/featured/featured-api';
 import FeaturedExtensionDownload from './FeaturedExtensionDownload.svelte';
 
-const extensionInstallFromImageMock = vi.fn();
-
 // fake the window.events object
 beforeAll(() => {
-  (window as any).extensionInstallFromImage = extensionInstallFromImageMock;
   (window.events as unknown) = {
-    receive: (_channel: string, func: any): void => {
+    receive: (_channel: string, func: () => void): void => {
       func();
     },
   };
@@ -80,7 +75,7 @@ test('Expect that we can see the button and click on the install', async () => {
   expect(installButton).toBeInTheDocument();
 
   // mock the install function
-  extensionInstallFromImageMock.mockImplementation(async () => {
+  vi.mocked(window.extensionInstallFromImage).mockImplementation(async () => {
     featuredExtension.installed = true;
     featuredExtension.fetchable = false;
     featuredExtension = { ...featuredExtension };
@@ -91,7 +86,7 @@ test('Expect that we can see the button and click on the install', async () => {
   await fireEvent.click(installButton);
 
   // install should have been called
-  expect(extensionInstallFromImageMock).toHaveBeenCalled();
+  expect(vi.mocked(window.extensionInstallFromImage)).toHaveBeenCalled();
 
   // now, expect the button to be gone
   // expect the button to be there

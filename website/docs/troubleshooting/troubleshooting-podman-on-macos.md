@@ -285,3 +285,14 @@ Check the size of the Podman Desktop log files to troubleshoot:
 ```sh
 $ ls -la ~/Library/Logs/Podman\ Desktop/*.log
 ```
+
+With Podman Desktop 1.16.0 or later versions, your computer might require a restart to truncate the Podman Desktop log files.
+To avoid restarting your computer, run these commands one by one:
+
+```shell-session
+$ launchctl unload  ~/Library/LaunchAgents/io.podman_desktop.PodmanDesktop.plist
+```
+
+```shell-session
+$ launchctl load  ~/Library/LaunchAgents/io.podman_desktop.PodmanDesktop.plist
+```

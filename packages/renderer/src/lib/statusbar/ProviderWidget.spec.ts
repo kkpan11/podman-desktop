@@ -77,22 +77,34 @@ test('Expect the prop command to be used when it is passed with the entry', asyn
   expect(router.goto).toBeCalledWith('/some/page');
 });
 
-test('Expect title to include container provider connections', () => {
+test('Expect tooltip to include container provider connections', () => {
   providerMock.containerConnections = [
-    { name: 'connection 1' } as unknown as ProviderContainerConnectionInfo,
-    { name: 'connection 2' } as unknown as ProviderContainerConnectionInfo,
+    { name: 'connection 1', status: 'ready' } as unknown as ProviderContainerConnectionInfo,
+    { name: 'connection 2', status: 'ready' } as unknown as ProviderContainerConnectionInfo,
+    { name: 'connection 3', status: 'stopped' } as unknown as ProviderContainerConnectionInfo,
   ];
   render(ProviderWidget, { entry: providerMock });
 
-  expect(screen.getByTitle('connection 1, connection 2')).toBeInTheDocument();
+  expect(screen.getAllByText('Running').length).toBe(2);
+  expect(screen.getAllByText('Off').length).toBe(1);
+
+  expect(screen.getByText(': connection 1')).toBeInTheDocument();
+  expect(screen.getByText(': connection 2')).toBeInTheDocument();
+  expect(screen.getByText(': connection 3')).toBeInTheDocument();
 });
 
-test('Expect title to include Kubernetes provider connections', () => {
+test('Expect tooltip to include Kubernetes provider connections', () => {
   providerMock.kubernetesConnections = [
-    { name: 'connection 1' } as unknown as ProviderKubernetesConnectionInfo,
-    { name: 'connection 2' } as unknown as ProviderKubernetesConnectionInfo,
+    { name: 'connection 1', status: 'ready' } as unknown as ProviderKubernetesConnectionInfo,
+    { name: 'connection 2', status: 'ready' } as unknown as ProviderKubernetesConnectionInfo,
+    { name: 'connection 3', status: 'stopped' } as unknown as ProviderKubernetesConnectionInfo,
   ];
   render(ProviderWidget, { entry: providerMock });
 
-  expect(screen.getByTitle('connection 1, connection 2')).toBeInTheDocument();
+  expect(screen.getAllByText('Running').length).toBe(2);
+  expect(screen.getAllByText('Off').length).toBe(1);
+
+  expect(screen.getByText(': connection 1')).toBeInTheDocument();
+  expect(screen.getByText(': connection 2')).toBeInTheDocument();
+  expect(screen.getByText(': connection 3')).toBeInTheDocument();
 });

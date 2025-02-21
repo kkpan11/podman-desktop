@@ -1,5 +1,5 @@
 /**********************************************************************
- * Copyright (C) 2022-2024 Red Hat, Inc.
+ * Copyright (C) 2022-2025 Red Hat, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import * as path from 'node:path';
 
 import type { ProxySettings } from '@podman-desktop/api';
 import * as extensionApi from '@podman-desktop/api';
+import { Mutex } from 'async-mutex';
 import * as toml from 'smol-toml';
 
 const configurationRosetta = 'setting.rosetta';
@@ -30,6 +31,7 @@ const configurationRosetta = 'setting.rosetta';
  * Manages access to the containers.conf configuration file used to configure Podman
  */
 export class PodmanConfiguration {
+  private mutex: Mutex = new Mutex();
   async init(): Promise<void> {
     let httpProxy = undefined;
     let httpsProxy = undefined;
@@ -105,6 +107,15 @@ export class PodmanConfiguration {
           await this.handleRosettaSetting();
         }
       });
+    }
+  }
+
+  async updateProxySettings(proxy: undefined | ProxySettings): Promise<void> {
+    const release = await this.mutex.acquire();
+    try {
+      await this.doUpdateProxySettings(proxy);
+    } finally {
+      release();
     }
   }
 
@@ -191,7 +202,7 @@ export class PodmanConfiguration {
     }
   }
 
-  async updateProxySettings(proxySettings: ProxySettings | undefined): Promise<void> {
+  async doUpdateProxySettings(proxySettings: ProxySettings | undefined): Promise<void> {
     // create empty config file
     const containersConfContent = {
       containers: {},

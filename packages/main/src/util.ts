@@ -1,5 +1,5 @@
 /**********************************************************************
- * Copyright (C) 2022-2024 Red Hat, Inc.
+ * Copyright (C) 2022-2025 Red Hat, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,6 +32,13 @@ const linux = os.platform() === 'linux';
 export function isLinux(): boolean {
   return linux;
 }
+const freebsd = os.platform() === 'freebsd';
+export function isFreeBSD(): boolean {
+  return freebsd;
+}
+export function isUnixLike(): boolean {
+  return linux || freebsd;
+}
 
 export const stoppedExtensions = { val: false };
 
@@ -54,7 +61,7 @@ export function getBase64Image(imagePath: string): string | undefined {
 
 export function requireNonUndefined<T>(obj: T | undefined, message?: string): T {
   if (obj === undefined) {
-    throw new Error(message ? message : 'Found undefined value.');
+    throw new Error(message ?? 'Found undefined value.');
   }
 
   return obj;

@@ -16,8 +16,6 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import '@testing-library/jest-dom/vitest';
 
 import { fireEvent, render, screen } from '@testing-library/svelte';
@@ -25,7 +23,7 @@ import { fireEvent, render, screen } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { get } from 'svelte/store';
 /* eslint-enable import/no-duplicates */
-import { beforeAll, expect, test, vi } from 'vitest';
+import { beforeEach, expect, test, vi } from 'vitest';
 
 import { onboardingList } from '/@/stores/onboarding';
 import { providerInfos } from '/@/stores/providers';
@@ -33,19 +31,12 @@ import type { ProviderInfo } from '/@api/provider-info';
 
 import WelcomePage from './WelcomePage.svelte';
 
-const getFeaturedExtensionsMock = vi.fn();
-const getProviderInfosMock = vi.fn();
-
 // fake the window.events object
-beforeAll(() => {
-  (window as any).getConfigurationValue = vi.fn();
-  (window as any).updateConfigurationValue = vi.fn();
-  (window as any).getPodmanDesktopVersion = vi.fn();
-  (window as any).telemetryConfigure = vi.fn();
-  (window as any).getFeaturedExtensions = getFeaturedExtensionsMock;
-  (window as any).getProviderInfos = getProviderInfosMock;
+beforeEach(() => {
+  vi.resetAllMocks();
+  vi.mocked(window.getPodmanDesktopVersion).mockResolvedValue('1.0.0');
   (window.events as unknown) = {
-    receive: (_channel: string, func: any): void => {
+    receive: (_channel: string, func: () => void): void => {
       func();
     },
   };
@@ -271,4 +262,17 @@ test('Make sure the provider with name podman appears first even if its 2nd in t
   const providerList = screen.getByLabelText('providerList');
   const firstChild = providerList.children[0];
   expect(firstChild).toHaveTextContent('Podman');
+});
+
+test('Expect that releaseNotesBanner.show configuration value is set to current version when showWelcome is set to true', async () => {
+  await waitRender({});
+  await vi.waitFor(() =>
+    expect(vi.mocked(window.updateConfigurationValue)).toBeCalledWith(`releaseNotesBanner.show`, '1.0.0'),
+  );
+});
+
+test('Expect that releaseNotesBanner.show configuration value is not set to current version when showWelcome is not set to true', async () => {
+  vi.mocked(window.getConfigurationValue).mockResolvedValueOnce('value1');
+  await waitRender({});
+  expect(vi.mocked(window.updateConfigurationValue)).not.toBeCalledWith(`releaseNotesBanner.show`, '1.0.0');
 });

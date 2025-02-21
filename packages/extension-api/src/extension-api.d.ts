@@ -607,13 +607,22 @@ declare module '@podman-desktop/api' {
     preflightChecks?(): InstallCheck[];
   }
 
+  export interface AutostartContext {
+    /**
+     * updateContainerConnection must be called by the provider when a connection status is updated
+     */
+    updateContainerConnection(containerProviderConnection: ContainerProviderConnection): void;
+  }
+
   /**
    * By providing this interface, when Podman Desktop is starting
    * It'll start the provider through this interface.
    * It can be turned off/on by the user.
+   *
+   * `context` contains helper functions to be called by the provider during startup (see {@link AutostartContext})
    */
   export interface ProviderAutostart {
-    start(logger: Logger): Promise<void>;
+    start(logger: Logger, context?: AutostartContext): Promise<void>;
   }
 
   /**
@@ -1085,7 +1094,7 @@ declare module '@podman-desktop/api' {
     url: string;
 
     // Optional base64 PNG image (for transparency / non vector icons)
-    icon?: string;
+    icon?: string | { light: string; dark: string };
   }
 
   export interface Registry extends RegistryCreateOptions {
@@ -1093,7 +1102,7 @@ declare module '@podman-desktop/api' {
 
     // Optional name and icon for the registry when it's being added (used for display within the UI)
     name?: string;
-    icon?: string;
+    icon?: string | { light: string; dark: string };
   }
 
   export interface RegistryCreateOptions {

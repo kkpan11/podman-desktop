@@ -18,6 +18,7 @@
 
 import * as fs from 'node:fs';
 
+import type { ProxySettings } from '@podman-desktop/api';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { PodmanConfiguration } from './podman-configuration';
@@ -164,4 +165,27 @@ describe('isRosettaEnabled', () => {
 
     expect(isEnabled).toBeFalsy();
   });
+});
+
+test('doUpdateProxySettings should be called one at the time', async () => {
+  const proxySettings: ProxySettings = {
+    httpProxy: 'httpProxy',
+    httpsProxy: 'httpsProxy',
+    noProxy: 'noProxy',
+  };
+
+  // Mock updateProxySettings
+  const doUpdateProxySettingsMock = vi.spyOn(podmanConfiguration, 'doUpdateProxySettings');
+
+  // Simultaneously call the function twice
+  const call1 = podmanConfiguration.updateProxySettings(undefined);
+  const call2 = podmanConfiguration.updateProxySettings(proxySettings);
+
+  await call1;
+  expect(doUpdateProxySettingsMock).toHaveBeenCalledTimes(1);
+  expect(doUpdateProxySettingsMock.mock.calls[0][0]).toBe(undefined);
+
+  await call2;
+  expect(doUpdateProxySettingsMock).toHaveBeenCalledTimes(2);
+  expect(doUpdateProxySettingsMock.mock.calls[1][0]).toBe(proxySettings);
 });
