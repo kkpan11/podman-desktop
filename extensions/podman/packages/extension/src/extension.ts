@@ -40,12 +40,12 @@ import { PodmanBinaryLocationHelper } from './helpers/podman-binary-location-hel
 import { PodmanInfoHelper } from './helpers/podman-info-helper';
 import { QemuHelper } from './helpers/qemu-helper';
 import { WslHelper } from './helpers/wsl-helper';
+import { PodmanInstall } from './installer/podman-install';
 import { PodmanRemoteConnections } from './remote/podman-remote-connections';
 import { getSocketCompatibility } from './utils/compatibility-mode';
 import type { InstalledPodman } from './utils/podman-cli';
 import { getPodmanCli, getPodmanInstallation } from './utils/podman-cli';
 import { PodmanConfiguration } from './utils/podman-configuration';
-import { PodmanInstall } from './utils/podman-install';
 import { ProviderConnectionShellAccessImpl } from './utils/podman-machine-stream';
 import { RegistrySetup } from './utils/registry-setup';
 import {
@@ -797,45 +797,49 @@ function shouldNotifyQemuMachinesWithV5(installedPodman: InstalledPodman): boole
 async function monitorProvider(provider: extensionApi.Provider): Promise<void> {
   // call us again
   if (!stopLoop) {
-    try {
-      const installedPodman = await getPodmanInstallation();
-      provider.updateDetectionChecks(getDetectionChecks(installedPodman));
-
-      // update version
-      if (!installedPodman) {
-        provider.updateStatus('not-installed');
-        extensionApi.context.setValue('podmanIsNotInstalled', true, 'onboarding');
-        // if podman is not installed and the OS is linux we show the podman onboarding notification (if it has not been shown earlier)
-        // this should be limited to Linux as in other OSes the onboarding workflow is enabled based on the podman machine existance
-        // and the notification is handled by checking the machine
-        if (extensionApi.env.isLinux && shouldNotifySetup) {
-          // push setup notification
-          notifySetupPodman();
-          shouldNotifySetup = false;
-        }
-      } else if (installedPodman.version) {
-        provider.updateVersion(installedPodman.version);
-        // update provider status if someone has installed podman externally
-        if (provider.status === 'not-installed') {
-          provider.updateStatus('installed');
-        }
-
-        extensionApi.context.setValue('podmanIsNotInstalled', false, 'onboarding');
-        // if podman has been installed, we reset the notification flag so if podman is uninstalled in future we can show the notification again
-        if (extensionApi.env.isLinux) {
-          shouldNotifySetup = true;
-          // notification is no more required
-          notificationDisposable?.dispose();
-        }
-      }
-    } catch (error) {
-      // ignore the update
-    }
+    await doMonitorProvider(provider);
   }
   await timeout(8000);
   monitorProvider(provider).catch((error: unknown) => {
     console.error('Error monitoring podman provider', error);
   });
+}
+
+async function doMonitorProvider(provider: extensionApi.Provider): Promise<void> {
+  try {
+    const installedPodman = await getPodmanInstallation();
+    provider.updateDetectionChecks(getDetectionChecks(installedPodman));
+
+    // update version
+    if (!installedPodman) {
+      provider.updateStatus('not-installed');
+      extensionApi.context.setValue('podmanIsNotInstalled', true, 'onboarding');
+      // if podman is not installed and the OS is linux we show the podman onboarding notification (if it has not been shown earlier)
+      // this should be limited to Linux as in other OSes the onboarding workflow is enabled based on the podman machine existance
+      // and the notification is handled by checking the machine
+      if (extensionApi.env.isLinux && shouldNotifySetup) {
+        // push setup notification
+        notifySetupPodman();
+        shouldNotifySetup = false;
+      }
+    } else if (installedPodman.version) {
+      provider.updateVersion(installedPodman.version);
+      // update provider status if someone has installed podman externally
+      if (provider.status === 'not-installed') {
+        provider.updateStatus('installed');
+      }
+
+      extensionApi.context.setValue('podmanIsNotInstalled', false, 'onboarding');
+      // if podman has been installed, we reset the notification flag so if podman is uninstalled in future we can show the notification again
+      if (extensionApi.env.isLinux) {
+        shouldNotifySetup = true;
+        // notification is no more required
+        notificationDisposable?.dispose();
+      }
+    }
+  } catch (error) {
+    // ignore the update
+  }
 }
 
 function prettyMachineName(machineName: string): string {

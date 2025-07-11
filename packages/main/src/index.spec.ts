@@ -21,11 +21,11 @@ import { app, BrowserWindow, Menu, Tray } from 'electron';
 import { aboutMenuItem } from 'electron-util/main';
 import { afterEach, assert, beforeEach, expect, test, vi } from 'vitest';
 
+import type { IConfigurationChangeEvent, IConfigurationRegistry } from '/@api/configuration/models.js';
+
 import { mainWindowDeferred } from './index.js';
-import type { ConfigurationRegistry, IConfigurationChangeEvent } from './plugin/configuration-registry.js';
 import { Emitter } from './plugin/events/emitter.js';
 import { PluginSystem } from './plugin/index.js';
-import { Deferred } from './plugin/util/deferred.js';
 import * as util from './util.js';
 
 const consoleLogMock = vi.fn();
@@ -64,7 +64,7 @@ const configurationRegistryMock = {
   getConfiguration: vi.fn().mockReturnValue({
     get: vi.fn(),
   }),
-} as unknown as ConfigurationRegistry;
+} as unknown as IConfigurationRegistry;
 
 const fakeWindow = {
   isDestroyed: vi.fn(),
@@ -176,7 +176,7 @@ beforeEach(() => {
   });
 
   vi.mocked(app.whenReady).mockReturnValue(constants.appReadyDeferredPromise);
-  const newDefer = new Deferred<BrowserWindow>();
+  const newDefer = Promise.withResolvers<BrowserWindow>();
   if (mainWindowDeferred.promise !== undefined) {
     mainWindowDeferred.resolve = newDefer.resolve;
     mainWindowDeferred.promise = newDefer.promise;
@@ -242,7 +242,7 @@ test('app-ready event with activate event', async () => {
   expect(_onDidConfigurationRegistry).toBeDefined();
 
   // cast as Emitter
-  const onDidConfigurationRegistry = _onDidConfigurationRegistry as Emitter<ConfigurationRegistry>;
+  const onDidConfigurationRegistry = _onDidConfigurationRegistry as Emitter<IConfigurationRegistry>;
 
   // create a Menu
   vi.mocked(Menu.getApplicationMenu).mockReturnValue({

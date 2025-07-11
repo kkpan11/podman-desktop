@@ -28,6 +28,8 @@ import type { ConfigurationRegistry } from '/@/plugin/configuration-registry.js'
 
 import { MacosStartup } from './macos-startup.js';
 
+type AppGetPathParam = Parameters<typeof app.getPath>[0];
+
 vi.mock('electron', async () => {
   return {
     app: {
@@ -53,6 +55,8 @@ let macosStartup: MacosStartup;
 const fakeAppExe = 'fakeAppExe';
 const fakeAppHome = 'fakeAppHome';
 
+const savedCommandLine = `/usr/bin/truncate -s 0 '${fakeAppHome}/Library/Logs/Podman Desktop/launchd-stdout.log'; /usr/bin/truncate -s 0 '${fakeAppHome}/Library/Logs/Podman Desktop/launchd-stderr.log'; '${fakeAppExe}' `;
+
 const originalConsoleInfo = console.info;
 const originalConsoleWarn = console.warn;
 
@@ -64,35 +68,15 @@ beforeEach(() => {
   // fake path.resolve by just adding /
   vi.mocked(resolve).mockImplementation((...args: string[]) => args.join('/'));
 
-  vi.mocked(app.getPath).mockImplementation(
-    (
-      name:
-        | 'home'
-        | 'appData'
-        | 'userData'
-        | 'sessionData'
-        | 'temp'
-        | 'exe'
-        | 'module'
-        | 'desktop'
-        | 'documents'
-        | 'downloads'
-        | 'music'
-        | 'pictures'
-        | 'videos'
-        | 'recent'
-        | 'logs'
-        | 'crashDumps',
-    ) => {
-      if (name === 'exe') {
-        return fakeAppExe;
-      }
-      if (name === 'home') {
-        return fakeAppHome;
-      }
-      throw new Error('Unsupported path');
-    },
-  );
+  vi.mocked(app.getPath).mockImplementation((name: AppGetPathParam) => {
+    if (name === 'exe') {
+      return fakeAppExe;
+    }
+    if (name === 'home') {
+      return fakeAppHome;
+    }
+    throw new Error('Unsupported path');
+  });
   macosStartup = new MacosStartup(configurationRegistry);
 });
 
@@ -112,9 +96,7 @@ describe('enable', () => {
     // check content being written
     expect(writeFile).toHaveBeenCalledWith(
       expect.stringContaining('fakeAppHome/Library/LaunchAgents/io.podman_desktop.PodmanDesktop.plist'),
-      expect.stringContaining(
-        `/usr/bin/truncate -s 0 'fakeAppHome/Library/Logs/Podman Desktop/launchd-stdout.log'; /usr/bin/truncate -s 0 'fakeAppHome/Library/Logs/Podman Desktop/launchd-stderr.log'; 'fakeAppExe'`,
-      ),
+      expect.stringContaining(savedCommandLine),
       'utf-8',
     );
 
@@ -124,35 +106,15 @@ describe('enable', () => {
 
   test('check unable to write the plist file if app is in /Volumes', async () => {
     // change the app home to be in /Volumes
-    vi.mocked(app.getPath).mockImplementation(
-      (
-        name:
-          | 'home'
-          | 'appData'
-          | 'userData'
-          | 'sessionData'
-          | 'temp'
-          | 'exe'
-          | 'module'
-          | 'desktop'
-          | 'documents'
-          | 'downloads'
-          | 'music'
-          | 'pictures'
-          | 'videos'
-          | 'recent'
-          | 'logs'
-          | 'crashDumps',
-      ) => {
-        if (name === 'exe') {
-          return `/Volumes/${fakeAppExe}`;
-        }
-        if (name === 'home') {
-          return fakeAppHome;
-        }
-        throw new Error('Unsupported path');
-      },
-    );
+    vi.mocked(app.getPath).mockImplementation((name: AppGetPathParam) => {
+      if (name === 'exe') {
+        return `/Volumes/${fakeAppExe}`;
+      }
+      if (name === 'home') {
+        return fakeAppHome;
+      }
+      throw new Error('Unsupported path');
+    });
     // recreate the object to get correct resolve method
     macosStartup = new MacosStartup(configurationRegistry);
 
@@ -168,6 +130,31 @@ describe('enable', () => {
     // check console
     expect(console.info).not.toHaveBeenCalled();
     expect(console.warn).toHaveBeenCalled();
+  });
+
+  test('check writing the plist file according to login.minimize configuration value', async () => {
+    vi.mocked(configurationRegistry.getConfiguration).mockReturnValue({
+      get: vi.fn().mockReturnValueOnce(true).mockReturnValueOnce(false),
+    } as unknown as Configuration);
+
+    await macosStartup.enable();
+
+    // check content being written
+    expect(writeFile).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.stringContaining(`<string>${savedCommandLine}--minimize</string>`),
+      'utf-8',
+    );
+
+    vi.mocked(writeFile).mockReset();
+    await macosStartup.enable();
+
+    // check content being written
+    expect(writeFile).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.stringContaining(`<string>${savedCommandLine}</string>`),
+      'utf-8',
+    );
   });
 });
 
@@ -198,35 +185,15 @@ describe('disable', () => {
 describe('shouldEnable', () => {
   test('check shouldEnable being true', async () => {
     // change the app folder to be in /Applications
-    vi.mocked(app.getPath).mockImplementation(
-      (
-        name:
-          | 'home'
-          | 'appData'
-          | 'userData'
-          | 'sessionData'
-          | 'temp'
-          | 'exe'
-          | 'module'
-          | 'desktop'
-          | 'documents'
-          | 'downloads'
-          | 'music'
-          | 'pictures'
-          | 'videos'
-          | 'recent'
-          | 'logs'
-          | 'crashDumps',
-      ) => {
-        if (name === 'exe') {
-          return `/Applications/${fakeAppExe}`;
-        }
-        if (name === 'home') {
-          return fakeAppHome;
-        }
-        throw new Error('Unsupported path');
-      },
-    );
+    vi.mocked(app.getPath).mockImplementation((name: AppGetPathParam) => {
+      if (name === 'exe') {
+        return `/Applications/${fakeAppExe}`;
+      }
+      if (name === 'home') {
+        return fakeAppHome;
+      }
+      throw new Error('Unsupported path');
+    });
 
     // recreate the object to get correct resolve method
     macosStartup = new MacosStartup(configurationRegistry);
