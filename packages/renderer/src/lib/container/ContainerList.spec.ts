@@ -18,13 +18,13 @@
 
 import '@testing-library/jest-dom/vitest';
 
-import { fireEvent, render, screen } from '@testing-library/svelte';
+import { fireEvent, render, type RenderResult, screen } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 /* eslint-disable import/no-duplicates */
-import { tick } from 'svelte';
+import { type Component, type ComponentProps, tick } from 'svelte';
 import { get } from 'svelte/store';
 /* eslint-enable import/no-duplicates */
-import { beforeAll, expect, test, vi } from 'vitest';
+import { beforeEach, expect, test, vi } from 'vitest';
 
 import type { ContainerInfo } from '/@api/container-info';
 import type { ProviderInfo } from '/@api/provider-info';
@@ -33,13 +33,28 @@ import { containersInfos } from '../../stores/containers';
 import { providerInfos } from '../../stores/providers';
 import ContainerList from './ContainerList.svelte';
 
-// fake the window.events object
-beforeAll(() => {
+beforeEach(() => {
+  vi.resetAllMocks();
   vi.mocked(window.listPods).mockResolvedValue([]);
   vi.mocked(window.listViewsContributions).mockResolvedValue([]);
   vi.mocked(window.getContributedMenus).mockResolvedValue([]);
   vi.mocked(window.getConfigurationValue).mockResolvedValue(false);
   vi.mocked(window.onDidUpdateProviderStatus).mockResolvedValue(undefined);
+  vi.mocked(window.listContainers).mockResolvedValue([]);
+  vi.mocked(window.getProviderInfos).mockResolvedValue([
+    {
+      name: 'podman',
+      status: 'started',
+      internalId: 'podman-internal-id',
+      containerConnections: [
+        {
+          name: 'podman-machine-default',
+          status: 'started',
+        },
+      ],
+    } as ProviderInfo,
+  ]);
+  // fake the window.events object
   (window.events as unknown) = {
     receive: (_channel: string, func: () => void): void => {
       func();
@@ -47,9 +62,10 @@ beforeAll(() => {
   };
 });
 
-async function waitRender(customProperties: object): Promise<void> {
-  render(ContainerList, { ...customProperties });
+async function waitRender(customProperties: object): Promise<RenderResult<Component<ComponentProps<ContainerList>>>> {
+  const result = render(ContainerList, { ...customProperties });
   await tick();
+  return result;
 }
 
 test('Expect no container engines being displayed', async () => {
@@ -282,10 +298,6 @@ test('Try to delete a pod that has containers', async () => {
 });
 
 test('Try to delete a container without deleting pods', async () => {
-  vi.mocked(window.removePod).mockClear();
-  vi.mocked(window.deleteContainer).mockClear();
-  vi.mocked(window.listContainers).mockResolvedValue([]);
-
   window.dispatchEvent(new CustomEvent('extensions-already-started'));
   window.dispatchEvent(new CustomEvent('provider-lifecycle-change'));
   window.dispatchEvent(new CustomEvent('tray:update-provider'));
@@ -365,10 +377,6 @@ test('Try to delete a container without deleting pods', async () => {
 });
 
 test('Try to delete a pod without deleting container', async () => {
-  vi.mocked(window.removePod).mockClear();
-  vi.mocked(window.deleteContainer).mockClear();
-  vi.mocked(window.listContainers).mockResolvedValue([]);
-
   window.dispatchEvent(new CustomEvent('extensions-already-started'));
   window.dispatchEvent(new CustomEvent('provider-lifecycle-change'));
   window.dispatchEvent(new CustomEvent('tray:update-provider'));
@@ -557,10 +565,6 @@ test('Expect clear filter in empty screen to clear serach term, except is:...', 
 });
 
 test('Expect to display running / stopped containers depending on tab', async () => {
-  vi.mocked(window.removePod).mockClear();
-  vi.mocked(window.deleteContainer).mockClear();
-  vi.mocked(window.listContainers).mockResolvedValue([]);
-
   window.dispatchEvent(new CustomEvent('extensions-already-started'));
   window.dispatchEvent(new CustomEvent('provider-lifecycle-change'));
   window.dispatchEvent(new CustomEvent('tray:update-provider'));
@@ -879,10 +883,6 @@ test('Expect user confirmation to pop up when preferences require', async () => 
 });
 
 test('Try to run pods in bulk', async () => {
-  vi.mocked(window.startPod).mockClear();
-  vi.mocked(window.startContainer).mockClear();
-  vi.mocked(window.listContainers).mockResolvedValue([]);
-
   window.dispatchEvent(new CustomEvent('extensions-already-started'));
   window.dispatchEvent(new CustomEvent('provider-lifecycle-change'));
   window.dispatchEvent(new CustomEvent('tray:update-provider'));
@@ -966,4 +966,95 @@ test('Try to run pods in bulk', async () => {
   // expect that the container is running
   expect(window.startContainer).toHaveBeenCalledWith('podman', containerId);
   expect(window.startContainer).toHaveBeenCalledOnce();
+});
+
+test('Ensuring the table and empty screen are not visible at the same time', async () => {
+  // mock one container
+  vi.mocked(window.listContainers).mockResolvedValue([
+    {
+      Id: 'sha256:7897891234567890123',
+      Image: 'sha256:345',
+      Names: ['container-in-pod'],
+      Status: 'Stopped',
+      engineId: 'podman',
+      engineName: 'podman',
+      ImageID: 'dummy-image-id',
+    } as ContainerInfo,
+  ]);
+  // mock zero provider infos
+  vi.mocked(window.getProviderInfos).mockResolvedValue([]);
+
+  window.dispatchEvent(new CustomEvent('extensions-already-started'));
+  window.dispatchEvent(new CustomEvent('provider-lifecycle-change'));
+  window.dispatchEvent(new CustomEvent('tray:update-provider'));
+
+  // wait until the stores are populated
+  await vi.waitFor(() => get(containersInfos).length === 1 && get(providerInfos).length === 0);
+
+  const { getByRole, queryByRole } = await waitRender({});
+
+  const noEngine = getByRole('heading', { name: 'No Container Engine' });
+  expect(noEngine).toBeInTheDocument();
+
+  const table = queryByRole('table');
+  expect(table).toBeNull();
+});
+
+test('pods with same name on different engines should have separate group', async () => {
+  window.dispatchEvent(new CustomEvent('extensions-already-started'));
+  window.dispatchEvent(new CustomEvent('provider-lifecycle-change'));
+  window.dispatchEvent(new CustomEvent('tray:update-provider'));
+
+  // wait until the store is populated
+  await vi.waitUntil(
+    async () => {
+      return get(containersInfos).length === 0;
+    },
+    { interval: 250, timeout: 5000 },
+  );
+
+  const CONTAINERS_MOCK: Array<ContainerInfo> = Array.from({ length: 3 }).map((_, index) => ({
+    Id: `sha256:${index}`,
+    Image: 'sha256:234',
+    Names: ['foo-bar-pod'], // have the same name for all
+    RepoTags: ['veryold:image'],
+    Status: 'Running',
+    pod: {
+      name: 'my-pod',
+      id: `podman-engine-${index}`, // unique pod id (only pod-id is unique accross all engines)
+      status: 'Running',
+      engineId: `podman-${index}`,
+    },
+    engineId: `podman-${index}`,
+    engineName: 'podman',
+    ImageID: 'dummy-image-id',
+    engineType: 'podman',
+    StartedAt: '0',
+    ImageBase64RepoTag: '',
+    Created: 0,
+    Ports: [],
+    Labels: {},
+    State: '',
+  }));
+
+  vi.mocked(window.listContainers).mockResolvedValue(CONTAINERS_MOCK);
+
+  window.dispatchEvent(new CustomEvent('extensions-already-started'));
+  window.dispatchEvent(new CustomEvent('provider-lifecycle-change'));
+  window.dispatchEvent(new CustomEvent('tray:update-provider'));
+
+  // wait until the store is populated
+  await vi.waitUntil(
+    async () => {
+      return get(containersInfos).length > 0;
+    },
+    { interval: 250, timeout: 5000 },
+  );
+
+  const { getAllByRole } = await waitRender({});
+
+  await vi.waitFor(() => {
+    const expandButtons = getAllByRole('button', { name: 'Collapse Row' });
+    expect(expandButtons).toHaveLength(CONTAINERS_MOCK.length);
+  });
 });

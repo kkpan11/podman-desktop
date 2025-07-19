@@ -22,7 +22,8 @@ import { render, screen } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 
-import type { IConfigurationPropertyRecordedSchema } from '../../../../../main/src/plugin/configuration-registry';
+import type { IConfigurationPropertyRecordedSchema } from '/@api/configuration/models';
+
 import EditableItem from './EditableItem.svelte';
 
 test('Expect input not being visible if editing is NOT in progress', async () => {
@@ -165,9 +166,6 @@ test('Expect onSave function called if save button is clicked', async () => {
   await userEvent.click(input);
   await userEvent.clear(input);
   await userEvent.keyboard('20');
-
-  // wait setTimeout in NumberItem expires and push call
-  await new Promise(resolve => setTimeout(resolve, 600));
 
   const buttonCancel = await screen.findByRole('button', { name: 'Cancel' });
   expect(buttonCancel).toBeInTheDocument();
