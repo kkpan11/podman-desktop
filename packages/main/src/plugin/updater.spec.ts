@@ -41,6 +41,7 @@ import type { TaskManager } from './tasks/task-manager.js';
 vi.mock('electron', () => ({
   app: {
     getVersion: vi.fn(),
+    getPath: vi.fn(),
   },
   shell: {
     openExternal: vi.fn(),

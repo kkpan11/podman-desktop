@@ -26,7 +26,7 @@ import { get } from 'svelte/store';
 import { beforeAll, beforeEach, expect, test, vi } from 'vitest';
 
 import BuildImageFromContainerfile from '/@/lib/image/BuildImageFromContainerfile.svelte';
-import { buildImagesInfo } from '/@/stores/build-images';
+import { buildImagesInfo, getNextTaskId } from '/@/stores/build-images';
 import { providerInfos } from '/@/stores/providers';
 import { recommendedRegistries } from '/@/stores/recommendedRegistries';
 import type { ProviderContainerConnectionInfo, ProviderInfo } from '/@api/provider-info';
@@ -554,7 +554,8 @@ test('Expect build page to load a state for a build requested by taskId', async 
   expect(buildButton).toBeVisible();
   expect(cancelButton).not.toBeVisible();
 
-  await rendering.rerender({ taskId: 9 });
+  //
+  await rendering.rerender({ taskId: getNextTaskId() - 2 });
 
   await waitFor(() => {
     expect(containerFilePath).not.toBeVisible();
@@ -586,4 +587,32 @@ test('Expect build page to load a state for a build requested by taskId', async 
   expect(containerFilePath).toHaveValue('/somepath/containerfile');
   expect(buildFolder).toHaveValue('/somepath');
   expect(containerImageName).toHaveValue('foobar');
-}, 100000);
+});
+
+test('Expect error to be displayed if uppercase character in image name', async () => {
+  setup();
+  const { getByRole, getByLabelText, getByText } = render(BuildImageFromContainerfile, {});
+
+  const containerFilePath = getByRole('textbox', { name: 'Containerfile path' });
+  expect(containerFilePath).toBeInTheDocument();
+  await userEvent.type(containerFilePath, '/somepath/containerfile');
+
+  const buildFolder = getByRole('textbox', { name: 'Build context directory' });
+  expect(buildFolder).toBeInTheDocument();
+  await userEvent.type(buildFolder, '/somepath');
+
+  // Get the input field by its associated label text
+  const imageNameInput = getByLabelText('Image name');
+
+  // Simulate user typing an image name with an uppercase character
+  await userEvent.type(imageNameInput, 'gpuTest');
+
+  // Check that the specific error message is now visible
+  const errorMessage = getByText('Image name should be lowercase');
+  expect(errorMessage).toBeInTheDocument();
+
+  // Verify the build button is still disabled
+  const buildButton = getByRole('button', { name: 'Build' });
+  expect(buildButton).toBeInTheDocument();
+  expect(buildButton).toBeDisabled();
+});

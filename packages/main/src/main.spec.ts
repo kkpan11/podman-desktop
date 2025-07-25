@@ -18,6 +18,9 @@
 import type { App as ElectronApp } from 'electron';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
+import type { AppPlugin } from '/@/plugin/app-ready/app-plugin.js';
+import { DefaultProtocolClient } from '/@/plugin/app-ready/default-protocol-client.js';
+import { WindowPlugin } from '/@/plugin/app-ready/window-plugin.js';
 import { SecurityRestrictions } from '/@/security-restrictions.js';
 import { isLinux, isMac, isWindows } from '/@/util.js';
 
@@ -27,6 +30,13 @@ import { Main } from './main.js';
 vi.mock('electron');
 vi.mock('/@/util.js');
 vi.mock('/@/security-restrictions.js');
+vi.mock(import('electron-context-menu'), () => ({
+  default: vi.fn(),
+}));
+
+// App Plugin
+vi.mock(import('/@/plugin/app-ready/default-protocol-client.js'));
+vi.mock(import('/@/plugin/app-ready/window-plugin.js'));
 
 const ELECTRON_APP_MOCK: ElectronApp = {
   name: 'dummy-electron-mock',
@@ -35,6 +45,9 @@ const ELECTRON_APP_MOCK: ElectronApp = {
   setAppUserModelId: vi.fn(),
   quit: vi.fn(),
   on: vi.fn(),
+  whenReady: vi.fn(),
+  setAsDefaultProtocolClient: vi.fn(),
+  isReady: vi.fn(),
   commandLine: {
     appendSwitch: vi.fn(),
   },
@@ -170,5 +183,59 @@ describe('ElectronApp#on window-all-closed', () => {
     listener();
 
     expect(ELECTRON_APP_MOCK.quit).toHaveBeenCalledOnce();
+  });
+});
+
+describe('AppPlugin', () => {
+  const plugins: Array<AppPlugin> = [DefaultProtocolClient.prototype, WindowPlugin.prototype];
+
+  let promiseWithResolvers: PromiseWithResolvers<void>;
+
+  beforeEach(() => {
+    promiseWithResolvers = Promise.withResolvers<void>();
+
+    // mock application as ready
+    vi.mocked(ELECTRON_APP_MOCK.isReady).mockReturnValue(true);
+
+    // mock the whenReady promise
+    vi.mocked(ELECTRON_APP_MOCK.whenReady).mockReturnValue(promiseWithResolvers.promise);
+
+    // start main
+    const code = new Main(ELECTRON_APP_MOCK);
+    code.main([]);
+  });
+
+  test('expect AppPlugin#onReady to be called when ElectronApp#whenReady resolved', async () => {
+    // expect each plugin to have been instantiated
+    plugins.forEach(plugin => {
+      expect(plugin.onReady).not.toHaveBeenCalled();
+    });
+
+    // simulate on ready
+    promiseWithResolvers.resolve();
+
+    await vi.waitFor(() => {
+      // expect each plugin to have been instantiated
+      plugins.forEach(plugin => {
+        expect(plugin.onReady).toHaveBeenCalled();
+      });
+    });
+  });
+
+  test('expect AppPlugin#dispose to be called when ElectronApp#on("before-quit") is emitted ', async () => {
+    // expect each plugin to have been instantiated
+    plugins.forEach(plugin => {
+      expect(plugin.dispose).not.toHaveBeenCalled();
+    });
+
+    const listener = getElectronAppListener('before-quit');
+    listener();
+
+    await vi.waitFor(() => {
+      // expect each plugin to be disposed
+      plugins.forEach(plugin => {
+        expect(plugin.dispose).toHaveBeenCalled();
+      });
+    });
   });
 });

@@ -22,6 +22,7 @@ import type { ExtensionContext, ProxySettings } from '@podman-desktop/api';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { PodmanConfiguration } from './podman-configuration';
+import { VMTYPE } from './util';
 
 // mock the API
 vi.mock('@podman-desktop/api', async () => {
@@ -169,6 +170,52 @@ describe('isRosettaEnabled', () => {
   });
 });
 
+test('when provider is set to applehv provider and there is already a file with provider = libkrun, remove it.', async () => {
+  vi.mock('node:fs');
+  vi.spyOn(fs.promises, 'writeFile').mockResolvedValue();
+  vi.spyOn(fs.promises, 'readFile').mockResolvedValue('');
+  vi.spyOn(podmanConfiguration, 'readContainersConfigFile').mockResolvedValue('[machine]\nprovider = "libkrun"');
+
+  vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+
+  await podmanConfiguration.updateMachineProviderSettings(VMTYPE.APPLEHV);
+
+  expect(fs.promises.writeFile).toHaveBeenCalledWith(
+    podmanConfiguration.getContainersFileLocation(),
+    // should not contain provider
+    expect.not.stringContaining('provider'),
+  );
+});
+
+test('should update provider', async () => {
+  vi.mock('node:fs');
+  vi.spyOn(fs.promises, 'writeFile').mockResolvedValue();
+  vi.spyOn(fs.promises, 'readFile').mockResolvedValue('');
+  vi.spyOn(podmanConfiguration, 'readContainersConfigFile').mockResolvedValue('[machine]\nprovider = "applehv"');
+
+  vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+
+  await podmanConfiguration.updateMachineProviderSettings(VMTYPE.LIBKRUN);
+
+  expect(fs.promises.writeFile).toHaveBeenCalledWith(
+    podmanConfiguration.getContainersFileLocation(),
+    // should contain provider
+    expect.stringContaining('provider = "libkrun"'),
+  );
+});
+
+test('if provider is set default one (on CLI) and the file does NOT exist, do not try and create the file.', async () => {
+  vi.mock('node:fs');
+  vi.spyOn(fs.promises, 'writeFile').mockResolvedValue();
+  vi.spyOn(fs.promises, 'readFile').mockResolvedValue('');
+  vi.spyOn(podmanConfiguration, 'readContainersConfigFile').mockResolvedValue('');
+  vi.spyOn(fs, 'existsSync').mockReturnValue(false);
+
+  await podmanConfiguration.updateMachineProviderSettings(VMTYPE.APPLEHV);
+
+  expect(fs.promises.writeFile).not.toHaveBeenCalled();
+});
+
 test('doUpdateProxySettings should be called one at the time', async () => {
   const proxySettings: ProxySettings = {
     httpProxy: 'httpProxy',
@@ -177,7 +224,7 @@ test('doUpdateProxySettings should be called one at the time', async () => {
   };
 
   // Mock updateProxySettings
-  const doUpdateProxySettingsMock = vi.spyOn(podmanConfiguration, 'doUpdateProxySettings');
+  const doUpdateProxySettingsMock = vi.spyOn(podmanConfiguration, 'doUpdateProxySettings').mockResolvedValue();
 
   // Simultaneously call the function twice
   const call1 = podmanConfiguration.updateProxySettings(undefined);
